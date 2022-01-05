@@ -1,31 +1,45 @@
 #ifndef ACBUFFER_HPP
 #define ACBUFFER_HPP
 
-#include <atomic>
 #include <type_traits>
 #include <mutex>
 #include <memory>
-#include <typeindex>
 #include <variant>
+#include <optional>
+#include <deque>
+#include <initializer_list>
+#include <atomic>
 
-
-/**
- * \brief create a interface of reader for the storage \p T
- *
- * The container resolution is taken from here https://devblogs.microsoft.com/oldnewthing/20190619-00/?p=102599
- * \todo implement for scalar
- */
 template<typename C,
-    typename T = std::decay_t<decltype(*begin(std::declval<C>()))>>
+	std::enable_if_t<std::is_copy_constructible<C>::value, bool> = true>
 class acbuffer
 {
 	public:
-	acbuffer(std::unique_ptr<C> arg, lock_strategy lock_type) : c(arg) {}
+	using lock_strategy = std::variant<std::defer_lock_t, std::try_to_lock_t, std::adopt_lock_t>;
+	acbuffer(std::initializer_list<C> l) {
+		for(C c : l) {
+			container.push_back(std::make_unique<C>(c));
+			observer.push_back(std::make_shared<C>(nullptr));
+		}
+	}
+
+	inline std::optional<std::shared_ptr<C>>get() { // todo move this to atomic<shared in c++20
+		std::scoped_lock lock(slock);
+		unsigned i;
+		for(i = 0; i < container.size() && observer[i].lock(); i++);
+		if(i == container.size()) {
+			return std::nullopt;
+		}
+		std::shared_ptr<C>res = std::make_shared<C>(*container[i].get());
+		observer[i] = res;
+		return observer[i];
+	}
+
+	std::mutex slock;
 
 	protected:
-	using lock_strategy = std::variant<std::defer_lock_t, std:: try_to_lock_t, std::adopt_lock_t>;
-	std::unique_ptr<C> c;
-	std::atomic<unsigned>pos;
+	std::deque<std::unique_ptr<C>> container;
+	std::deque<std::weak_ptr<C>> observer;
 };
 
 #endif

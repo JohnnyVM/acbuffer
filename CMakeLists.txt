@@ -42,14 +42,15 @@ set(CMAKE_CXX_STANDARD ${C_STANDARD})
 set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-add_library(orm STATIC
+target_include_directories(${template} PUBLIC include)
+add_library(${template} STATIC
 	src/${template}.cpp)
 
 if(TESTS)
 add_subdirectory(tests)
 endif()
 
-install(TARGETS orm DESTINATION lib)
+install(TARGETS ${template} DESTINATION lib)
 install(DIRECTORY
 		${PROJECT_BINARY_DIR}/include/
 	DESTINATION include)
